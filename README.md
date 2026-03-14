@@ -24,26 +24,71 @@ This project requires a lightweight Python backend alongside a standard web fron
 2. A webcam connected to your device.
 
 ### 1. Backend Initialization
-The backend server handles the local SQLite database that stores biometric encoded arrays.
+
+The backend server manages a local **SQLite database** that stores biometric encoded arrays.
+
+#### Setup Steps
+
+1. **Navigate to the backend directory**
+
 ```bash
-# Navigate to the project root
-$ cd d:\Blog\dblog
+cd dblog
+```
 
-# Install the required Flask dependencies from requirements.txt
-$ pip install -r requirements.txt
+2. **Install uv (if not installed)**
 
-# Run the backend server (starts on localhost:5000)
-$ python app.py
+```bash
+pip install uv
+```
+
+3. **Create a virtual environment**
+
+```bash
+uv venv
+```
+
+4. **Activate the virtual environment**
+
+Linux / macOS
+
+```bash
+source .venv/bin/activate
+```
+
+Windows
+
+```bash
+.venv\Scripts\activate
+```
+
+5. **Install project dependencies**
+
+```bash
+uv pip install -r requirements.txt
+```
+
+**or**
+
+```bash
+uv sync
+```
+
+6. **Run the backend server**
+
+```bash
+uv run python app.py
+```
+
+The backend server will start at:
+
+```
+http://localhost:5000
 ```
 
 ### 2. Frontend Access
-Once the python server is running, the terminal can execute in any modern browser. 
-Since it uses `face-api.js` models stored in the root `/models` folder, **do not just double-click the `index.html` file**, as the browser will block the models. Run a simple http server, or serve the directory via VSCode's LiveServer extension.
-```bash
-# In a new terminal window inside the dblog folder:
-$ python -m http.server 8000
-```
-Open your browser and navigate to `http://localhost:8000/index.html`. 
+Once the python server is running, The Flask backend automatically serves the frontend on port 5000.
+
+Open your browser and navigate to `http://localhost:5000/`. 
 
 ---
 
