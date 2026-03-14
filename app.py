@@ -1,7 +1,7 @@
 import os
 import math
 import json
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -55,11 +55,13 @@ def token_required(f):
 
 @app.route('/')
 def serve_index():
-    return send_file('index.html')
+    return render_template('index.html')
 
 @app.route('/feed')
 def serve_blogs_page():
-    return send_file('blogs.html')
+    # If blogs.html is not yet in templates, you might want to move it there too. 
+    # For now, let's assume it's moved to templates.
+    return render_template('blogs.html')
 
 @app.route('/signup', methods=['POST'])
 def signup():

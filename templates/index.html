@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DBlog</title>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+    <div id="auth-overlay">
+        <h1>SYSTEM IDENTIFICATION REQUIRED</h1>
+        <div id="login-form" style="display:flex; flex-direction:column; align-items:center;">
+            <input type="email" id="auth-email" placeholder="> EMAIL" class="term-input" />
+            <br>
+            <input type="password" id="auth-password" placeholder="> PASSWORD" class="term-input" />
+            <br>
+            <button class="btn-system" onclick="startFaceScan('login')" style="width: 300px; margin: 5px;">[SCAN_FACE_DATA]</button>
+            <input type="hidden" id="login-face" value="" />
+            <span id="login-face-status" style="font-size: 12px; margin-bottom: 5px;">FACE NOT SCANNED</span>
+            <div>
+                <button class="btn-system" onclick="login()">[AUTHENTICATE]</button>
+                <button class="btn-system" onclick="showSignup()">[NEW_SURVIVOR]</button>
+            </div>
+        </div>
+        <div id="signup-form" style="display:none; flex-direction:column; align-items:center;">
+            <input type="text" id="reg-name" placeholder="> NAME" class="term-input" />
+            <input type="number" id="reg-age" placeholder="> AGE" class="term-input" />
+            <input type="email" id="reg-email" placeholder="> EMAIL" class="term-input" />
+            <input type="password" id="reg-password" placeholder="> PASSWORD" class="term-input" />
+            <button class="btn-system" onclick="startFaceScan('register')" style="width: 300px; margin: 5px;">[SCAN_FACE_DATA]</button>
+            <input type="hidden" id="reg-face" value="" />
+            <span id="face-status" style="font-size: 12px; margin-bottom: 5px;">FACE NOT SCANNED</span>
+            <br>
+            <div>
+                <button class="btn-system" onclick="register()">[REGISTER_NODE]</button>
+                <button class="btn-system" onclick="showLogin()">[< CANCEL]</button>
+            </div>
+        </div>
+        <div id="auth-error" style="color: var(--danger-red); margin-top: 15px;"></div>
+    </div>
+
+    <div id="video-container" style="display:none; flex-direction:column; align-items:center; z-index:10000; position:fixed; top:20%; left:50%; transform:translate(-50%, 0); background:var(--terminal-bg); border:1px solid var(--glow-color); padding: 10px; overflow: hidden;">
+        <h3 style="margin-top:0; position:relative; z-index: 10002;">SCANNING BIOMETRICS...</h3>
+        <video id="videoElement" autoplay muted style="width: 300px; height: 225px; border: 1px dashed var(--glow-color); position:relative; z-index: 10000;"></video>
+        <button class="btn-system" style="margin-top: 10px; position:relative; z-index: 10002;" onclick="cancelFaceScan()">[CANCEL_UPLOAD]</button>
+    </div>
+
+    <!-- NAVBAR FOR AUTHENTICATED USERS -->
+    <div id="nav-bar" style="display:none; width:100%; padding:10px 20px; background:var(--terminal-bg); border-bottom:1px dotted var(--glow-color); position:fixed; top:0; z-index:9990; box-sizing:border-box;">
+        <span style="font-weight: bold;">[OS_NAV_SYS]: </span>
+        <button class="btn-system" onclick="showHome()">[HOME_DIR]</button>
+        <button class="btn-system" onclick="showEditor()">[APPEND_LOG]</button>
+        <button class="btn-system" onclick="viewArchives()">[BIN_ARCHIVE]</button>
+        <button class="btn-system" onclick="showProtocol()">[DBLOG_PROTOCOL]</button>
+        <button class="btn-system" onclick="showTerminal()">[SYS_TERM]</button>
+        <button class="btn-system" onclick="logout()" style="float:right; color:var(--danger-red);">[TERMINATE_SESSION]</button>
+    </div>
+
+    <!-- PROTOCOL VIEW (Lore & Chatbot) -->
+    <div id="protocol-view" style="display:none; flex-direction:column; padding:60px 20px 20px 20px; box-sizing:border-box; width:100%; height:100vh; overflow:hidden; position:fixed; top:0; left:0; z-index:9998; background:var(--terminal-bg);">
+        <div style="width:100%; margin-bottom: 20px;">
+            <button class="btn-system" onclick="showHome()" style="padding-left:0;">[< RETURN_TO_LOCAL]</button>
+        </div>
+        <h2 style="margin:0 0 10px 0; border-bottom:2px solid var(--glow-color); padding-bottom:8px;">
+            >_ SYSTEM_PROTOCOL: S.O.S_FAQ_UPLINK
+        </h2>
+        <div id="protocol-chat-output" style="flex:1; overflow-y:auto; font-size:13px; line-height:1.7; padding-bottom:10px; height: calc(100vh - 180px); border: 1px dotted rgba(0,255,65,0.2); padding: 15px; background: rgba(0,0,0,0.3);">
+            <div style="color:var(--danger-red); margin-bottom: 10px;">[NOTICE]: SECURE UPLINK ESTABLISHED. LORE_DAEMON v1.1 ACTIVE.</div>
+            <div style="margin-bottom: 10px;">> WELCOME, SURVIVOR. I AM THE ARCHIVAL INTERFACE. ASK ME ABOUT THE "LORE", "PURGE", "RECOVERY", OR THE "SWITCH".</div>
+        </div>
+        <div style="display:flex; align-items:center; border-top:1px dotted var(--glow-color); padding-top:10px; margin-top:10px;">
+            <span style="white-space:nowrap; margin-right:8px; color:var(--glow-color); opacity: 0.7;">query@protocol:~$</span>
+            <input id="protocol-chat-input" type="text" autocomplete="off" spellcheck="false"
+                style="flex:1; background:transparent; border:none; outline:none; color:var(--glow-color); font-family:'Courier New',monospace; font-size:13px;"
+                placeholder="INPUT QUERY..."
+                onkeydown="handleProtocolInput(event)" />
+        </div>
+    </div>
+
+    <!-- HOME VIEW (Own Posts) -->
+    <div id="home-view">
+        <div style="width:100%;">
+            <h2 style="text-align:left; border-bottom: 2px solid var(--glow-color); font-weight: bold; margin-bottom: 30px;">
+                >_ DISPLAYING: LOCAL_USER_LOGS.DAT
+            </h2>
+            <div id="my-blogs-container" style="width:100%; display:flex; flex-direction:column;">
+                <!-- Blogs injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN EDITOR (Write Post) -->
+    <div id="write-view">
+        <div style="width: 100%; display: flex; flex-direction: column;">
+            <div id="ui-header" style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex-grow: 1;">[SESSION_ID: <span id="current-user-name"></span>]</div>
+                <div id="decay-meter" style="text-align: right;">[SECURE_CHANNEL_TIMEOUT: <span id="timer">60</span>s]</div>
+            </div>
+
+            <input type="text" id="journal-title" placeholder="> INPUT_HEADER" />
+            <textarea id="journal-textarea" placeholder="> AWAITING_INPUT_STREAM..._"></textarea>
+
+            <div class="controls">
+                <button class="btn-system" onclick="saveBlog()">[EXECUTE_COMMIT]</button>
+                <button class="btn-system" id="dictate-btn" onclick="toggleDictation()">[VOICE_UPLINK]</button>
+                <canvas id="voice-visualizer" width="220" height="30" style="display:none; border:1px dashed var(--danger-red); margin-left: 10px; vertical-align: middle;"></canvas>
+                <button class="btn-system" onclick="purgeLog()">[SIGKILL_DRAFT]</button>
+                <button class="btn-system" onclick="restoreBackup()">[RECOVER_MEM_DUMP]</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ARCHIVES VIEW (Bunker) -->
+    <div id="archives-view" style="justify-content: flex-start;">
+        <div style="width:100%;">
+            <div style="width:100%; margin-bottom: 20px;">
+                <button class="btn-system" onclick="showHome()" style="padding-left:0;">[< RETURN_TO_LOCAL]</button>
+            </div>
+            <h2 style="text-align:left; border-bottom: 2px solid var(--glow-color); font-weight: bold; margin-bottom: 20px;">
+                >_ ACCESSING: GLOBAL_ARCHIVES_NODE.DAT
+            </h2>
+            <div id="blogs-container" style="width:100%; display:flex; flex-direction:column;">
+                <!-- Blogs injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TERMINAL VIEW -->
+    <div id="terminal-view" style="display:none; flex-direction:column; padding:60px 20px 20px 20px; box-sizing:border-box; width:100%; height:100vh; overflow:hidden; position:fixed; top:0; left:0; z-index:9998; background:var(--terminal-bg);">
+        <div style="width:100%; margin-bottom: 10px;">
+            <button class="btn-system" onclick="showHome()" style="padding-left:0;">[< RETURN_TO_LOCAL]</button>
+        </div>
+        <h2 style="margin:0 0 10px 0; border-bottom:2px solid var(--glow-color); padding-bottom:8px;">
+            >_ BUNKER_OS: /bin/bash
+        </h2>
+        <div id="term-output" style="flex:1; overflow-y:auto; font-size:13px; line-height:1.7; padding-bottom:10px; height: calc(100vh - 130px); overflow-y:auto;"></div>
+        <div style="display:flex; align-items:center; border-top:1px dotted var(--glow-color); padding-top:8px; margin-top:8px;">
+            <span id="term-prompt" style="white-space:nowrap; margin-right:8px; color:var(--glow-color);">root@bunker:~$</span>
+            <input id="term-input" type="text" autocomplete="off" spellcheck="false"
+                style="flex:1; background:transparent; border:none; outline:none; color:var(--glow-color); font-family:'Courier New',monospace; font-size:13px;"
+                placeholder="type 'help' for available commands"
+                onkeydown="handleTermInput(event)" />
+        </div>
+    </div>
+
+
+    <!-- SYSTEM MESSAGE NOTIFICATIONS -->
+    <div id="sys-message" style="position:fixed; bottom:20px; right:20px; z-index:10000; font-weight:bold; padding:10px; background:var(--terminal-bg); border:1px solid var(--glow-color); display:none; max-width:300px; word-wrap:break-word;"></div>
+
+    <button id="still-alive-btn" onclick="confirmExistence()">STILL ALIVE</button>
+
+    <div id="custom-cursor">
+        <svg width="28" height="20" viewBox="0 0 28 20" xmlns="http://www.w3.org/2000/svg" style="display:block; filter: drop-shadow(0 0 4px #00ff41);">
+            <polyline points="2,4 10,10 2,16" fill="none" stroke="#00ff41" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            <line x1="13" y1="16" x2="26" y2="16" stroke="#00ff41" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+    </div>
+
+    <script src="/static/js/terminal.js"></script>
+    <script src="/static/js/protocol.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+
+</html>
