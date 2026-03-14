@@ -351,6 +351,8 @@
 
             <div class="controls">
                 <button class="btn-system" onclick="saveBlog()">[EXECUTE_COMMIT]</button>
+                <button class="btn-system" id="dictate-btn" onclick="toggleDictation()">[VOICE_UPLINK]</button>
+                <canvas id="voice-visualizer" width="220" height="30" style="display:none; border:1px dashed var(--danger-red); margin-left: 10px; vertical-align: middle;"></canvas>
                 <button class="btn-system" onclick="purgeLog()">[SIGKILL_DRAFT]</button>
                 <button class="btn-system" onclick="restoreBackup()">[RECOVER_MEM_DUMP]</button>
             </div>
@@ -915,6 +917,135 @@
                 showMessage("BACKUP RESTORED SUCCESSFULLY.");
             } else {
                 showMessage("NO BACKUP FOUND IN SYSTEM.", true);
+            }
+        }
+
+        // Voice Uplink / Dictation Logic
+        let recognition = null;
+        let isDictating = false;
+        let animationId = null;
+        let wavePhase = 0; // Global phase offset for animation
+
+        function startVisualizer() {
+            const canvas = document.getElementById("voice-visualizer");
+            canvas.style.display = "inline-block";
+            const ctx = canvas.getContext("2d");
+            const W = canvas.width;
+            const H = canvas.height;
+            const cx = H / 2; // vertical center
+
+            function draw() {
+                if (!isDictating) return;
+                animationId = requestAnimationFrame(draw);
+
+                // Clear with terminal background
+                ctx.fillStyle = '#050505';
+                ctx.fillRect(0, 0, W, H);
+
+                // Draw a subtle center line
+                ctx.strokeStyle = 'rgba(255,49,49,0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, cx);
+                ctx.lineTo(W, cx);
+                ctx.stroke();
+
+                // Primary wave — fast, mid amplitude
+                ctx.beginPath();
+                ctx.strokeStyle = '#ff3131';
+                ctx.lineWidth = 1.5;
+                ctx.shadowColor = '#ff3131';
+                ctx.shadowBlur = 6;
+                for (let x = 0; x < W; x++) {
+                    const t = (x / W) * Math.PI * 4 + wavePhase;
+                    // Mix two frequencies for an "organic" heartbeat feel
+                    const amp = (cx - 3) * (0.55 + 0.45 * Math.abs(Math.sin(wavePhase * 0.7)));
+                    const y = cx + Math.sin(t) * amp * 0.6
+                             + Math.sin(t * 2.3 + 1.1) * amp * 0.25
+                             + Math.sin(t * 0.5 - 0.8) * amp * 0.15;
+                    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                wavePhase += 0.12; // Controls scroll speed
+            }
+            draw();
+        }
+
+        function stopVisualizer() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            // Draw a flat line to signal terminated uplink
+            const canvas = document.getElementById("voice-visualizer");
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#ff3131';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+            setTimeout(() => { canvas.style.display = 'none'; }, 400);
+        }
+
+        function toggleDictation() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                showMessage("VOICE UPLINK FAILED: HARDWARE NOT DETECTED.", true);
+                return;
+            }
+            
+            if (!recognition) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                // Using only final results for the terminal aesthetic
+                recognition.interimResults = false;
+
+                recognition.onstart = function() {
+                    isDictating = true;
+                    document.getElementById('dictate-btn').innerText = "[VOICE_UPLINK_ACTIVE]";
+                    document.getElementById('dictate-btn').style.color = "var(--danger-red)";
+                    showMessage("VOICE UPLINK ESTABLISHED. AWAITING AUDIO...");
+                    startVisualizer();
+                };
+
+                recognition.onerror = function(event) {
+                    console.error("Speech Recognition Error:", event);
+                    showMessage("VOICE UPLINK ERROR: " + event.error.toUpperCase(), true);
+                };
+
+                recognition.onend = function() {
+                    isDictating = false;
+                    document.getElementById('dictate-btn').innerText = "[VOICE_UPLINK]";
+                    document.getElementById('dictate-btn').style.color = "var(--glow-color)";
+                    showMessage("VOICE UPLINK SEVERED.");
+                    stopVisualizer();
+                };
+
+                recognition.onresult = function(event) {
+                    const textArea = document.getElementById('journal-textarea');
+                    let newText = "";
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            newText += event.results[i][0].transcript + ' ';
+                        }
+                    }
+                    
+                    if (newText.length > 0) {
+                        textArea.value += newText;
+                        playKeystroke(); // Audio feedback when text appears
+                    }
+                };
+            }
+
+            if (isDictating) {
+                recognition.stop();
+            } else {
+                recognition.start();
             }
         }
 
