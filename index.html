@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schrödinger’s Diary // UI TEST</title>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        :root {
+            --glow-color: #00ff41;
+            --danger-red: #ff3131;
+            --terminal-bg: #050505;
+        }
+
+        body {
+            background-color: var(--terminal-bg);
+            color: var(--glow-color);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            overflow: hidden;
+            /* Prevents scrollbars from breaking the 'Dumb' UI */
+        }
+
+        /* Scanline / CRT Effect */
+        body::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 1000;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        #ui-header {
+            border-bottom: 2px solid var(--glow-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* The 60s Countdown Timer [cite: 62] */
+        #decay-meter {
+            color: var(--danger-red);
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--danger-red);
+        }
+
+        /* Journal Input Area [cite: 14] */
+        #journal-textarea, #journal-title {
+            width: 100%;
+            background: rgba(0, 255, 65, 0.05);
+            color: var(--glow-color);
+            border: 1px solid var(--glow-color);
+            padding: 15px;
+            font-size: 18px;
+            outline: none;
+            box-shadow: inset 0 0 10px #00ff4133;
+            box-sizing: border-box;
+        }
+        
+        #journal-title {
+            margin-bottom: 10px;
+        }
+
+        #journal-textarea {
+            height: 55vh;
+            resize: none;
+        }
+
+        /* The Moving "Still Alive" Button [cite: 58, 59] */
+        #still-alive-btn {
+            position: absolute;
+            background: var(--danger-red);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 20px var(--danger-red);
+            transition: transform 0.1s;
+            z-index: 500;
+            display: none;
+        }
+
+        #still-alive-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* Action Buttons [cite: 33] */
+        .controls {
+            margin-top: 20px;
+        }
+
+        .btn-system {
+            background: transparent;
+            color: var(--glow-color);
+            border: 1px solid var(--glow-color);
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+        }
+
+        .btn-system:hover {
+            background: var(--glow-color);
+            color: black;
+        }
+
+        .term-input {
+            background: rgba(0, 255, 65, 0.05);
+            color: var(--glow-color);
+            border: 1px solid var(--glow-color);
+            padding: 10px;
+            margin: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            width: 300px;
+            outline: none;
+        }
+
+        #auth-overlay, #archives-view {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--terminal-bg);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #home-view, #archives-view, #write-view {
+            z-index: 9998;
+            display: none;
+            align-items: flex-start;
+            padding: 50px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            width: 100%;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .blog-post {
+            border: 1px solid var(--glow-color);
+            padding: 15px;
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 800px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+        
+        .blog-post h3 {
+            margin-top: 0;
+            border-bottom: 1px dashed var(--glow-color);
+            padding-bottom: 5px;
+        }
+        
+        .like-btn {
+            background: transparent;
+            color: var(--danger-red);
+            border: 1px solid var(--danger-red);
+            cursor: pointer;
+            padding: 5px 10px;
+            font-family: 'Courier New', monospace;
+            float: right;
+        }
+        .like-btn:hover {
+            background: var(--danger-red);
+            color: white;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--terminal-bg);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--glow-color);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="auth-overlay">
+        <h1>SYSTEM IDENTIFICATION REQUIRED</h1>
+        <div id="login-form" style="display:flex; flex-direction:column; align-items:center;">
+            <input type="email" id="auth-email" placeholder="EMAIL" class="term-input" />
+            <br>
+            <input type="password" id="auth-password" placeholder="PASSWORD" class="term-input" />
+            <br>
+            <button class="btn-system" onclick="startFaceScan('login')" style="width: 300px; margin: 5px;">SCAN FACE DATA</button>
+            <input type="hidden" id="login-face" value="" />
+            <span id="login-face-status" style="font-size: 12px; margin-bottom: 5px;">FACE NOT SCANNED</span>
+            <div>
+                <button class="btn-system" onclick="login()">AUTHENTICATE</button>
+                <button class="btn-system" onclick="showSignup()">NEW SURVIVOR</button>
+            </div>
+        </div>
+        <div id="signup-form" style="display:none; flex-direction:column; align-items:center;">
+            <input type="text" id="reg-name" placeholder="NAME" class="term-input" />
+            <input type="number" id="reg-age" placeholder="AGE" class="term-input" />
+            <input type="email" id="reg-email" placeholder="EMAIL" class="term-input" />
+            <input type="password" id="reg-password" placeholder="PASSWORD" class="term-input" />
+            <button class="btn-system" onclick="startFaceScan('register')" style="width: 300px; margin: 5px;">SCAN FACE DATA</button>
+            <input type="hidden" id="reg-face" value="" />
+            <span id="face-status" style="font-size: 12px; margin-bottom: 5px;">FACE NOT SCANNED</span>
+            <br>
+            <div>
+                <button class="btn-system" onclick="register()">REGISTER</button>
+                <button class="btn-system" onclick="showLogin()">BACK</button>
+            </div>
+        </div>
+        <div id="auth-error" style="color: var(--danger-red); margin-top: 15px;"></div>
+    </div>
+
+    <div id="video-container" style="display:none; flex-direction:column; align-items:center; z-index:10000; position:fixed; top:20%; left:50%; transform:translate(-50%, 0); background:var(--terminal-bg); border:1px solid var(--glow-color); padding: 10px;">
+        <h3 style="margin-top:0;">SCANNING BIOMETRICS...</h3>
+        <video id="videoElement" autoplay muted style="width: 300px; height: 225px; border: 1px dashed var(--glow-color);"></video>
+        <button class="btn-system" style="margin-top: 10px;" onclick="cancelFaceScan()">CANCEL</button>
+    </div>
+
+    <!-- NAVBAR FOR AUTHENTICATED USERS -->
+    <div id="nav-bar" style="display:none; width:100%; padding:10px 20px; background:var(--terminal-bg); border-bottom:2px solid var(--glow-color); position:fixed; top:0; z-index:9990; box-sizing:border-box;">
+        <button class="btn-system" onclick="showHome()">MY POSTS</button>
+        <button class="btn-system" onclick="showEditor()">WRITE POST</button>
+        <button class="btn-system" onclick="viewArchives()">BUNKER</button>
+        <button class="btn-system" onclick="logout()" style="float:right; border-color:var(--danger-red); color:var(--danger-red);">LOGOUT</button>
+    </div>
+
+    <!-- HOME VIEW (Own Posts) -->
+    <div id="home-view" style="padding-top:80px;">
+        <h2 style="width:100%; max-width:800px; text-align:left; border-bottom: 2px solid var(--glow-color);">MY PERSONAL LOGS</h2>
+        <div id="my-blogs-container" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+            <!-- Blogs injected here -->
+        </div>
+    </div>
+
+    <!-- MAIN EDITOR (Write Post) -->
+    <div id="write-view" style="display:none; height:100vh; flex-direction:column; padding:80px 20px 20px 20px; box-sizing:border-box;">
+        <div id="ui-header" style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex-grow: 1;">[LOG_TYPE: SURVIVOR_TEXT] | USER: <span id="current-user-name"></span></div>
+            <div id="decay-meter" style="text-align: right;">STABILITY DECAY: <span id="timer">60</span>s</div>
+        </div>
+
+        <input type="text" id="journal-title" placeholder="ENTER SUBJECT..." />
+        <textarea id="journal-textarea" placeholder="TRANSMISSION STARTING... Type to record your existence."></textarea>
+
+        <div class="controls">
+            <button class="btn-system" onclick="saveBlog()">ARCHIVE TO BUNKER</button>
+            <button class="btn-system" onclick="purgeLog()">PURGE LOG</button>
+            <button class="btn-system" onclick="restoreBackup()">RESTORE TIMEOUT BACKUP</button>
+        </div>
+    </div>
+
+    <!-- ARCHIVES VIEW (Bunker) -->
+    <div id="archives-view" style="padding-top:80px;">
+        <h2 style="width:100%; max-width:800px; text-align:left; border-bottom: 2px solid var(--glow-color);">BUNKER ARCHIVES</h2>
+        <div style="width:100%; max-width:800px; margin-bottom: 20px;">
+            <button class="btn-system" onclick="showHome()">BACK TO HOME</button>
+        </div>
+        <div id="blogs-container" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+            <!-- Blogs injected here -->
+        </div>
+    </div>
+
+    <!-- SYSTEM MESSAGE NOTIFICATIONS -->
+    <div id="sys-message" style="position:fixed; bottom:20px; right:20px; z-index:10000; font-weight:bold; padding:10px; background:var(--terminal-bg); border:1px solid var(--glow-color); display:none; max-width:300px; word-wrap:break-word;"></div>
+
+    <button id="still-alive-btn" onclick="confirmExistence()">STILL ALIVE</button>
+
+    <script>
+        const API_URL = "http://127.0.0.1:5000";
+        let timer = 60;
+        let lastCheckpoint = "";
+        let timerInterval;
+        let moveInterval;
+        let sysMsgTimeout;
+
+        function showMessage(msg, isError = false) {
+            const sysBox = document.getElementById("sys-message");
+            sysBox.style.display = "block";
+            sysBox.innerText = `>> ${msg}`;
+            sysBox.style.color = isError ? "var(--danger-red)" : "var(--glow-color)";
+            sysBox.style.borderColor = isError ? "var(--danger-red)" : "var(--glow-color)";
+            clearTimeout(sysMsgTimeout);
+            sysMsgTimeout = setTimeout(() => { sysBox.style.display = "none"; }, 3000);
+        }
+
+        const textArea = document.getElementById('journal-textarea');
+        const timerDisplay = document.getElementById('timer');
+        const aliveBtn = document.getElementById('still-alive-btn');
+
+        let faceModelsLoaded = false;
+        async function loadFaceModels() {
+            if (faceModelsLoaded) return;
+            const modelUrl = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            document.getElementById("auth-error").innerText = "LOADING BIOMETRIC MODELS...";
+            await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+            await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+            faceModelsLoaded = true;
+            document.getElementById("auth-error").innerText = "";
+        }
+
+        let faceScanMode = null; 
+        let videoStream = null;
+
+        async function startFaceScan(mode) {
+            faceScanMode = mode;
+            await loadFaceModels();
+            
+            const videoContainer = document.getElementById('video-container');
+            const video = document.getElementById('videoElement');
+            videoContainer.style.display = 'flex';
+            
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: {} });
+                video.srcObject = videoStream;
+            } catch (err) {
+                document.getElementById("auth-error").innerText = "CAMERA ACCESS DENIED.";
+                videoContainer.style.display = 'none';
+                return;
+            }
+
+            video.addEventListener('play', onVideoPlay);
+        }
+
+        function cancelFaceScan() {
+            const videoContainer = document.getElementById('video-container');
+            const video = document.getElementById('videoElement');
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+            videoContainer.style.display = 'none';
+            video.removeEventListener('play', onVideoPlay);
+        }
+
+        async function onVideoPlay() {
+            const videoContainer = document.getElementById('video-container');
+            const video = document.getElementById('videoElement');
+            if (videoContainer.style.display === 'none' || video.paused || video.ended || !faceScanMode) return;
+            
+            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+            
+            if (detection) {
+                const descriptor = Array.from(detection.descriptor);
+                const strData = JSON.stringify(descriptor);
+                
+                cancelFaceScan();
+                
+                if (faceScanMode === 'register') {
+                    document.getElementById('reg-face').value = strData;
+                    document.getElementById('face-status').innerText = "FACE SCANNED AND ENCODED.";
+                    document.getElementById('face-status').style.color = "var(--glow-color)";
+                } else if (faceScanMode === 'login') {
+                    document.getElementById('login-face').value = strData;
+                    document.getElementById('login-face-status').innerText = "FACE SCANNED AND ENCODED.";
+                    document.getElementById('login-face-status').style.color = "var(--glow-color)";
+                }
+                faceScanMode = null;
+            } else {
+                setTimeout(onVideoPlay, 500);
+            }
+        }
+
+        // Navigation & Auth Logic
+        let currentUserId = localStorage.getItem("user_id");
+        let currentUserName = localStorage.getItem("user_name");
+
+        function hideAllViews() {
+            document.getElementById("auth-overlay").style.display = "none";
+            document.getElementById("write-view").style.display = "none";
+            document.getElementById("archives-view").style.display = "none";
+            document.getElementById("home-view").style.display = "none";
+            document.getElementById("nav-bar").style.display = "none";
+            stopLogic();
+        }
+
+        function checkAuth() {
+            if (currentUserId) {
+                document.getElementById("current-user-name").innerText = currentUserName;
+                showHome();
+            } else {
+                hideAllViews();
+                document.getElementById("auth-overlay").style.display = "flex";
+            }
+        }
+
+        async function showHome() {
+            hideAllViews();
+            document.getElementById("nav-bar").style.display = "block";
+            document.getElementById("home-view").style.display = "flex";
+            
+            const container = document.getElementById("my-blogs-container");
+            container.innerHTML = "LOADING PERSONAL LOGS...";
+            
+            try {
+                const res = await fetch(`${API_URL}/blogs`);
+                const blogs = await res.json();
+                
+                container.innerHTML = "";
+                const myBlogs = blogs.filter(b => String(b.author_id) === String(currentUserId));
+                
+                if (myBlogs.length === 0) {
+                    container.innerHTML = "<p>NO PERSONAL LOGS FOUND.</p>";
+                    return;
+                }
+
+                myBlogs.forEach(blog => {
+                    const div = document.createElement("div");
+                    div.className = "blog-post";
+                    div.innerHTML = `
+                        <button class="like-btn" onclick="likeBlog(${blog.id}, true)">👍 ${blog.likes}</button>
+                        <h3>${blog.title}</h3>
+                        <p style="white-space: pre-wrap; font-size: 14px; margin-bottom: 20px;">${blog.para}</p>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (e) {
+                container.innerHTML = "<p style='color:var(--danger-red)'>SIGNAL LOST.</p>";
+            }
+        }
+
+        function showEditor() {
+            hideAllViews();
+            document.getElementById("nav-bar").style.display = "block";
+            document.getElementById("write-view").style.display = "flex";
+            
+            document.getElementById('journal-title').value = '';
+            document.getElementById('journal-textarea').value = '';
+            lastCheckpoint = "";
+            
+            startLogic(); // Initiate 60s timer + moving still alive button!
+        }
+
+        function showSignup() {
+            document.getElementById("login-form").style.display = "none";
+            document.getElementById("signup-form").style.display = "flex";
+            document.getElementById("auth-error").innerText = "";
+        }
+
+        function showLogin() {
+            document.getElementById("login-form").style.display = "flex";
+            document.getElementById("signup-form").style.display = "none";
+            document.getElementById("auth-error").innerText = "";
+        }
+
+        async function login() {
+            const email = document.getElementById("auth-email").value;
+            const password = document.getElementById("auth-password").value;
+            const face_data = document.getElementById("login-face").value;
+            
+            if (!email || !password || !face_data) {
+                document.getElementById("auth-error").innerText = "MISSING EMAIL, PASSWORD, OR FACE SCAN.";
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_URL}/signin`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, password, face_data})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    currentUserId = data.user_id;
+                    currentUserName = data.name;
+                    localStorage.setItem("user_id", currentUserId);
+                    localStorage.setItem("user_name", currentUserName);
+                    checkAuth();
+                } else {
+                    document.getElementById("auth-error").innerText = data.error;
+                }
+            } catch (e) {
+                document.getElementById("auth-error").innerText = "NETWORK ERROR.";
+            }
+        }
+
+        async function register() {
+            const name = document.getElementById("reg-name").value;
+            const age = document.getElementById("reg-age").value;
+            const email = document.getElementById("reg-email").value;
+            const password = document.getElementById("reg-password").value;
+            const face_data = document.getElementById("reg-face").value;
+
+            try {
+                const res = await fetch(`${API_URL}/signup`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, age, email, password, face_data})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById("auth-error").innerText = "REGISTRATION OK. PLEASE LOGIN.";
+                    document.getElementById("auth-error").style.color = "var(--glow-color)";
+                    showLogin();
+                } else {
+                    document.getElementById("auth-error").innerText = data.error;
+                    document.getElementById("auth-error").style.color = "var(--danger-red)";
+                }
+            } catch (e) {
+                document.getElementById("auth-error").innerText = "NETWORK ERROR.";
+                document.getElementById("auth-error").style.color = "var(--danger-red)";
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem("user_id");
+            localStorage.removeItem("user_name");
+            currentUserId = null;
+            currentUserName = null;
+            checkAuth();
+        }
+
+        // 1. Implementation of the 60s deletion rule [cite: 56, 60]
+        function startLogic() {
+            timer = 60;
+            aliveBtn.style.display = "block";
+            clearInterval(timerInterval);
+            clearInterval(moveInterval);
+            
+            timerInterval = setInterval(() => {
+                timer--;
+                timerDisplay.innerText = timer;
+
+                if (timer <= 0) {
+                    // Backup to local storage before wiping
+                    localStorage.setItem("timeout_backup_title", document.getElementById('journal-title').value);
+                    localStorage.setItem("timeout_backup_para", textArea.value);
+
+                    // Explode immediately [cite: 63]
+                    document.getElementById('journal-title').value = '';
+                    textArea.value = "";
+                    lastCheckpoint = "";
+                    showMessage("CRITICAL ERROR: BIOMETRIC TIMEOUT. POST ERASED.", true);
+                    timer = 60;
+                }
+            }, 1000);
+
+            moveInterval = setInterval(moveButton, 3000);
+            moveButton();
+        }
+
+        function stopLogic() {
+            clearInterval(timerInterval);
+            clearInterval(moveInterval);
+            aliveBtn.style.display = "none";
+        }
+
+        // 2. Random button movement Logic
+        function moveButton() {
+            if (document.getElementById("write-view").style.display !== "flex") return;
+            const maxX = window.innerWidth - 200;
+            const maxY = window.innerHeight - 100;
+            // Ensure button doesn't jump onto navbar
+            let randomY = Math.floor(Math.random() * maxY);
+            if (randomY < 80) randomY = 80; 
+            const randomX = Math.floor(Math.random() * maxX);
+
+            aliveBtn.style.left = randomX + 'px';
+            aliveBtn.style.top = randomY + 'px';
+        }
+
+        // Confirmation logic [cite: 57]
+        function confirmExistence() {
+            lastCheckpoint = textArea.value;
+            timer = 60;
+            timerDisplay.innerText = timer;
+            moveButton();
+            console.log("State Observed. Timer Reset.");
+        }
+
+        function purgeLog() {
+            document.getElementById('journal-title').value = '';
+            document.getElementById('journal-textarea').value = '';
+        }
+
+        function restoreBackup() {
+            const bTitle = localStorage.getItem("timeout_backup_title");
+            const bPara = localStorage.getItem("timeout_backup_para");
+            if (bTitle || bPara) {
+                document.getElementById('journal-title').value = bTitle || '';
+                document.getElementById('journal-textarea').value = bPara || '';
+                showMessage("BACKUP RESTORED SUCCESSFULLY.");
+            } else {
+                showMessage("NO BACKUP FOUND IN SYSTEM.", true);
+            }
+        }
+
+        async function saveBlog() {
+            const title = document.getElementById('journal-title').value;
+            const para = document.getElementById('journal-textarea').value;
+            if (!title || !para) {
+                showMessage("TRANSMISSION FAILED. MISSING DATA.", true);
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/blogs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': currentUserId
+                    },
+                    body: JSON.stringify({title, para, image: ""})
+                });
+                if (res.ok) {
+                    showMessage("ARCHIVE SUCCESSFUL.");
+                    document.getElementById('journal-title').value = '';
+                    document.getElementById('journal-textarea').value = '';
+                    lastCheckpoint = '';
+                } else {
+                    showMessage("ARCHIVE FAILED: CORRUPTION DETECTED.", true);
+                }
+            } catch (e) {
+                showMessage("ARCHIVE FAILED: NO SIGNAL.", true);
+            }
+        }
+
+        async function viewArchives() {
+            hideAllViews();
+            document.getElementById("nav-bar").style.display = "block";
+            document.getElementById("archives-view").style.display = "flex";
+
+            const container = document.getElementById("blogs-container");
+            container.innerHTML = "LOADING ARCHIVES...";
+
+            try {
+                const res = await fetch(`${API_URL}/blogs`);
+                const blogs = await res.json();
+                
+                container.innerHTML = "";
+                
+                if (blogs.length === 0) {
+                    container.innerHTML = "<p>NO ARCHIVES FOUND.</p>";
+                    return;
+                }
+
+                blogs.forEach(blog => {
+                    const div = document.createElement("div");
+                    div.className = "blog-post";
+                    div.innerHTML = `
+                        <button class="like-btn" onclick="likeBlog(${blog.id}, false)">👍 ${blog.likes}</button>
+                        <h3>${blog.title}</h3>
+                        <p style="white-space: pre-wrap; font-size: 14px; margin-bottom: 20px;">${blog.para}</p>
+                        <small style="color:var(--danger-red)">AUTHOR: ${blog.author} | ID: ${blog.author_id}</small>
+                    `;
+                    container.appendChild(div);
+                });
+
+            } catch (e) {
+                container.innerHTML = "<p style='color:var(--danger-red)'>SIGNAL LOST. UNABLE TO LOAD ARCHIVES.</p>";
+            }
+        }
+
+        async function likeBlog(blogId, isHomeView) {
+            try {
+                const res = await fetch(`${API_URL}/blogs/${blogId}/like`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': currentUserId
+                    }
+                });
+                if (res.ok) {
+                    if (isHomeView) {
+                        showHome();
+                    } else {
+                        viewArchives();
+                    }
+                } else {
+                    showMessage("COMMUNICATION ERROR.", true);
+                }
+            } catch (e) {
+                showMessage("NETWORK DISCONNECTED.", true);
+            }
+        }
+
+        // Init
+        checkAuth();
+
+    </script>
+</body>
+
+</html>
